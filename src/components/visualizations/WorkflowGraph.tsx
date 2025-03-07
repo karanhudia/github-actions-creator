@@ -4,6 +4,14 @@ import {useEffect, useRef, useState} from 'react';
 import * as d3 from 'd3';
 import {useTheme} from '@/context/ThemeContext';
 import { checkWorkflowForErrors, WorkflowError } from '@/lib/workflowErrorChecker';
+import { 
+  createNodes, 
+  addTextToNodes, 
+  createForceSimulation, 
+  createLinks, 
+  updatePositions,
+  addIndicator
+} from '@/lib/d3Helpers';
 
 interface WorkflowGraphProps {
   workflow: any;
@@ -648,138 +656,79 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
     const width = svgRef.current!.clientWidth;
     const height = svgRef.current!.clientHeight;
 
-    // Create a force simulation with vertical layout
-    const simulation = d3.forceSimulation(jobs as any)
-      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(200))
-      .force('charge', d3.forceManyBody().strength(-1500))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      // Add y-positioning force for vertical layout
-      .force('y', d3.forceY().strength(0.2).y((d: any, i) => {
-        return (i * 150) + 100; // Increased vertical spacing
-      }))
-      // Reduce x-force to keep jobs more aligned vertically
-      .force('x', d3.forceX().strength(0.1).x(width / 2))
-      // Add collision detection to prevent overlap
-      .force('collision', d3.forceCollide().radius(100).strength(0.8));
-      
-    // Fix nodes in place after initial layout
-    simulation.on('end', () => {
-      jobs.forEach((d: any) => {
-        d.fx = d.x;
-        d.fy = d.y;
-      });
+    // Create force simulation
+    const simulation = createForceSimulation(jobs, links, {
+      width,
+      height,
+      linkDistance: 200,
+      chargeStrength: -1500,
+      verticalSpacing: 150,
+      verticalStrength: 0.2,
+      horizontalStrength: 0.1,
+      collisionRadius: 100,
+      collisionStrength: 0.8,
+      nodeWidth: 90,
+      nodeHeight: 40
     });
 
-    // Draw links
-    const link = container.append('g')
-      .selectAll('line')
-      .data(links)
-      .enter().append('line')
-      .attr('stroke', '#999')
-      .attr('stroke-opacity', 0.6)
-      .attr('stroke-width', 2)
-      .attr('marker-end', 'url(#arrowhead)');
+    // Create links
+    const link = createLinks(container, links);
 
-    // Define arrow marker
-    container.append('defs').append('marker')
-      .attr('id', 'arrowhead')
-      .attr('viewBox', '-0 -5 10 10')
-      .attr('refX', 30)
-      .attr('refY', 0)
-      .attr('orient', 'auto')
-      .attr('markerWidth', 6)
-      .attr('markerHeight', 6)
-      .attr('xoverflow', 'visible')
-      .append('svg:path')
-      .attr('d', 'M 0,-5 L 10,0 L 0,5')
-      .attr('fill', '#999')
-      .style('stroke', 'none');
-
-    // Draw nodes
-    const node = container.append('g')
-      .selectAll('g')
-      .data(jobs)
-      .enter().append('g')
-      // Remove drag behavior to make nodes fixed
-      .on('click', (event: any, d: any) => {
+    // Create nodes
+    const node = createNodes(container, jobs, {
+      width: 180,
+      height: 80,
+      fill: '#4299e1',
+      stroke: '#2b6cb0',
+      onClick: (event: any, d: any) => {
         setSelectedJob(d.id);
         setViewMode('steps');
-      });
+      },
+      showShadow: true
+    });
 
-    // Add rectangles for nodes with increased size
-    node.append('rect')
-      .attr('width', 180)
-      .attr('height', 80)
-      .attr('rx', 8)
-      .attr('ry', 8)
-      .attr('fill', '#4299e1')
-      .attr('stroke', '#2b6cb0')
-      .attr('stroke-width', 2)
-      .attr('cursor', 'pointer')
-      .attr('filter', 'drop-shadow(0px 2px 3px rgba(0, 0, 0, 0.2))');
-
-    // Add job name with better text positioning
-    node.append('text')
-      .attr('text-anchor', 'middle')
-      .attr('x', 90)
-      .attr('y', 30)
-      .attr('fill', 'white')
-      .attr('font-weight', 'bold')
-      .attr('font-size', '14px')
-      .text((d: any) => d.name)
-      .attr('cursor', 'pointer');
+    // Add job name
+    addTextToNodes(node, {
+      text: (d: any) => d.name,
+      x: 90,
+      y: 30,
+      fontSize: '14px',
+      fontWeight: 'bold',
+      fill: 'white'
+    });
 
     // Add runner info
-    node.append('text')
-      .attr('text-anchor', 'middle')
-      .attr('x', 90)
-      .attr('y', 50)
-      .attr('fill', 'white')
-      .attr('font-size', '12px')
-      .text((d: any) => `runs-on: ${d.runsOn}`)
-      .attr('cursor', 'pointer');
+    addTextToNodes(node, {
+      text: (d: any) => `runs-on: ${d.runsOn}`,
+      x: 90,
+      y: 50,
+      fontSize: '12px',
+      fontWeight: 'normal',
+      fill: 'white'
+    });
 
     // Add step count
-    node.append('text')
-      .attr('text-anchor', 'middle')
-      .attr('x', 90)
-      .attr('y', 68)
-      .attr('fill', 'white')
-      .attr('font-size', '12px')
-      .text((d: any) => `${d.stepCount} step${d.stepCount !== 1 ? 's' : ''}`)
-      .attr('cursor', 'pointer');
+    addTextToNodes(node, {
+      text: (d: any) => `${d.stepCount} step${d.stepCount !== 1 ? 's' : ''}`,
+      x: 90,
+      y: 68,
+      fontSize: '12px',
+      fontWeight: 'normal',
+      fill: 'white'
+    });
 
     // Add env indicator
-    node.filter((d: any) => d.hasEnv)
-      .append('circle')
-      .attr('cx', 165)
-      .attr('cy', 15)
-      .attr('r', 6)
-      .attr('fill', '#48bb78')
-      .attr('cursor', 'pointer');
+    addIndicator(node, {
+      filter: (d: any) => d.hasEnv,
+      cx: 165,
+      cy: 15,
+      radius: 6,
+      fill: '#48bb78'
+    });
 
     // Update positions on simulation tick
     simulation.on('tick', () => {
-      // Constrain nodes to stay within bounds
-      jobs.forEach((d: any) => {
-        d.x = Math.max(90, Math.min(width - 90, d.x));
-        d.y = Math.max(40, Math.min(height - 40, d.y));
-        
-        // Fix position after initial layout
-        if (simulation.alpha() < 0.1) {
-          d.fx = d.x;
-          d.fy = d.y;
-        }
-      });
-      
-      link
-        .attr('x1', (d: any) => d.source.x)
-        .attr('y1', (d: any) => d.source.y)
-        .attr('x2', (d: any) => d.target.x)
-        .attr('y2', (d: any) => d.target.y);
-
-      node
-        .attr('transform', (d: any) => `translate(${d.x - 90}, ${d.y - 40})`);
+      updatePositions(link, node, 90, 40);
     });
   };
 
@@ -813,139 +762,83 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
     const width = svgRef.current!.clientWidth;
     const height = svgRef.current!.clientHeight;
 
-    // Create a force simulation with vertical layout
-    const simulation = d3.forceSimulation(steps as any)
-      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(180))
-      .force('charge', d3.forceManyBody().strength(-1000))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      // Add y-positioning force for vertical layout
-      .force('y', d3.forceY().strength(0.3).y((d: any, i) => {
-        return (i * 150) + 100; // Increased vertical spacing
-      }))
-      // Reduce x-force to keep steps more aligned vertically
-      .force('x', d3.forceX().strength(0.2).x(width / 2))
-      // Add collision detection to prevent overlap
-      .force('collision', d3.forceCollide().radius(90).strength(0.8));
-      
-    // Fix nodes in place after initial layout
-    simulation.on('end', () => {
-      steps.forEach((d: any) => {
-        d.fx = d.x;
-        d.fy = d.y;
-      });
+    // Create force simulation
+    const simulation = createForceSimulation(steps, links, {
+      width,
+      height,
+      linkDistance: 180,
+      chargeStrength: -1000,
+      verticalSpacing: 150,
+      verticalStrength: 0.3,
+      horizontalStrength: 0.2,
+      collisionRadius: 90,
+      collisionStrength: 0.8,
+      nodeWidth: 90,
+      nodeHeight: 50
     });
 
-    // Draw links
-    const link = container.append('g')
-      .selectAll('line')
-      .data(links)
-      .enter().append('line')
-      .attr('stroke', '#999')
-      .attr('stroke-opacity', 0.6)
-      .attr('stroke-width', 2)
-      .attr('marker-end', 'url(#arrowhead)');
+    // Create links
+    const link = createLinks(container, links);
 
-    // Define arrow marker
-    container.append('defs').append('marker')
-      .attr('id', 'arrowhead')
-      .attr('viewBox', '-0 -5 10 10')
-      .attr('refX', 30)
-      .attr('refY', 0)
-      .attr('orient', 'auto')
-      .attr('markerWidth', 6)
-      .attr('markerHeight', 6)
-      .attr('xoverflow', 'visible')
-      .append('svg:path')
-      .attr('d', 'M 0,-5 L 10,0 L 0,5')
-      .attr('fill', '#999')
-      .style('stroke', 'none');
-
-    // Draw nodes
-    const node = container.append('g')
-      .selectAll('g')
-      .data(steps)
-      .enter().append('g')
-      // Remove drag behavior to make nodes fixed
-      .on('click', (event: any, d: any) => {
+    // Create nodes
+    const node = createNodes(container, steps, {
+      width: 180,
+      height: 100,
+      fill: (d: any) => d.uses ? '#8B5CF6' : '#F59E0B',
+      stroke: (d: any) => d.uses ? '#6D28D9' : '#D97706',
+      onClick: (event: any, d: any) => {
         setSelectedStep(d);
-      });
-
-    // Add rectangles for nodes
-    node.append('rect')
-      .attr('width', 180)
-      .attr('height', 100)
-      .attr('rx', 8)
-      .attr('ry', 8)
-      .attr('fill', (d: any) => d.uses ? '#8B5CF6' : '#F59E0B')
-      .attr('stroke', (d: any) => d.uses ? '#6D28D9' : '#D97706')
-      .attr('stroke-width', 2)
-      .attr('cursor', 'pointer')
-      .attr('filter', 'drop-shadow(0px 2px 3px rgba(0, 0, 0, 0.2))');
+      },
+      showShadow: true
+    });
 
     // Add step name
-    node.append('text')
-      .attr('text-anchor', 'middle')
-      .attr('x', 90)
-      .attr('y', 30)
-      .attr('fill', 'white')
-      .attr('font-weight', 'bold')
-      .attr('font-size', '14px')
-      .text((d: any) => d.name.length > 20 ? d.name.substring(0, 17) + '...' : d.name);
+    addTextToNodes(node, {
+      text: (d: any) => d.name,
+      x: 90,
+      y: 30,
+      fontSize: '14px',
+      fontWeight: 'bold',
+      fill: 'white',
+      maxLength: 20
+    });
 
     // Add action/command info
-    node.append('text')
-      .attr('text-anchor', 'middle')
-      .attr('x', 90)
-      .attr('y', 55)
-      .attr('fill', 'white')
-      .attr('font-size', '12px')
-      .text((d: any) => {
-        if (d.uses) return `uses: ${d.uses.length > 20 ? d.uses.substring(0, 17) + '...' : d.uses}`;
-        if (d.run) return `run: ${d.run.length > 20 ? d.run.substring(0, 17) + '...' : d.run}`;
-        return 'No action or command';
+    addTextToNodes(node, {
+      text: (d: any) => d.uses ? `uses: ${d.uses.split('@')[0]}` : 'run command',
+      x: 90,
+      y: 50,
+      fontSize: '12px',
+      fontWeight: 'normal',
+      fill: 'white',
+      maxLength: 25
+    });
+
+    // Add version info for actions
+    node.filter((d: any) => d.uses)
+      .call(node => {
+        addTextToNodes(node, {
+          text: (d: any) => `@${d.uses.split('@')[1] || 'latest'}`,
+          x: 90,
+          y: 70,
+          fontSize: '12px',
+          fontWeight: 'normal',
+          fill: 'white'
+        });
       });
 
-    // Add variable indicator
-    node.filter((d: any) => d.hasVariables)
-      .append('text')
-      .attr('text-anchor', 'middle')
-      .attr('x', 90)
-      .attr('y', 80)
-      .attr('fill', 'white')
-      .attr('font-size', '12px')
-      .text((d: any) => `Uses ${d.variables.length} variable${d.variables.length !== 1 ? 's' : ''}`);
-
-    // Add env indicator
-    node.filter((d: any) => d.hasEnv)
-      .append('circle')
-      .attr('cx', 165)
-      .attr('cy', 15)
-      .attr('r', 6)
-      .attr('fill', '#48bb78')
-      .attr('cursor', 'pointer');
+    // Add variables indicator
+    addIndicator(node, {
+      filter: (d: any) => d.hasVariables,
+      cx: 165,
+      cy: 15,
+      radius: 6,
+      fill: '#48bb78'
+    });
 
     // Update positions on simulation tick
     simulation.on('tick', () => {
-      // Constrain nodes to stay within bounds
-      steps.forEach((d: any) => {
-        d.x = Math.max(90, Math.min(width - 90, d.x));
-        d.y = Math.max(50, Math.min(height - 50, d.y));
-        
-        // Fix position after initial layout
-        if (simulation.alpha() < 0.1) {
-          d.fx = d.x;
-          d.fy = d.y;
-        }
-      });
-      
-      link
-        .attr('x1', (d: any) => d.source.x)
-        .attr('y1', (d: any) => d.source.y)
-        .attr('x2', (d: any) => d.target.x)
-        .attr('y2', (d: any) => d.target.y);
-
-      node
-        .attr('transform', (d: any) => `translate(${d.x - 90}, ${d.y - 50})`);
+      updatePositions(link, node, 90, 50);
     });
   };
 
