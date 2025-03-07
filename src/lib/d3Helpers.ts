@@ -295,4 +295,218 @@ export function addIndicator(
     .attr('r', radius)
     .attr('fill', fill)
     .attr('cursor', 'pointer');
+}
+
+/**
+ * Creates a hierarchical tree layout for workflow visualization
+ * @param data - The nodes data
+ * @param links - The links data
+ * @param options - Configuration options for the tree layout
+ * @returns Object containing positioned nodes and links
+ */
+export function createTreeLayout(
+  data: any[],
+  links: any[],
+  options: {
+    width: number;
+    height: number;
+    direction?: 'vertical' | 'horizontal';
+    nodeWidth?: number;
+    nodeHeight?: number;
+    levelSpacing?: number;
+    siblingSpacing?: number;
+    centerX?: number;
+    centerY?: number;
+  }
+) {
+  const {
+    width,
+    height,
+    direction = 'vertical',
+    nodeWidth = 180,
+    nodeHeight = 80,
+    levelSpacing = 200,
+    siblingSpacing = 220,
+    centerX = width / 2,
+    centerY = 100
+  } = options;
+
+  // Create a map of nodes by ID for quick lookup
+  const nodesById = new Map(data.map(d => [d.id, d]));
+
+  // Find root nodes (nodes with no incoming links)
+  const targetIds = new Set(links.map(l => typeof l.target === 'object' ? l.target.id : l.target));
+  const rootIds = data
+    .map(d => d.id)
+    .filter(id => !targetIds.has(id));
+
+  // If no root found, use the first node
+  const rootId = rootIds.length > 0 ? rootIds[0] : data[0]?.id;
+
+  // Build adjacency list for children
+  const childrenMap = new Map();
+  data.forEach(node => {
+    childrenMap.set(node.id, []);
+  });
+
+  links.forEach(link => {
+    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+    
+    if (childrenMap.has(sourceId)) {
+      childrenMap.get(sourceId).push(targetId);
+    }
+  });
+
+  // First pass: count nodes at each level to determine width
+  const levelCounts = new Map<number, number>();
+  
+  function countNodesAtLevel(nodeId: string, level: number) {
+    const node = nodesById.get(nodeId);
+    if (!node) return;
+    
+    levelCounts.set(level, (levelCounts.get(level) || 0) + 1);
+    
+    const children = childrenMap.get(nodeId) || [];
+    children.forEach((childId: string) => {
+      countNodesAtLevel(childId, level + 1);
+    });
+  }
+  
+  // Count nodes at each level starting from root
+  countNodesAtLevel(rootId, 0);
+  
+  // Calculate max width needed at each level
+  const maxNodesPerLevel = Math.max(...Array.from(levelCounts.values()));
+  
+  // Function to recursively position nodes
+  function positionNodes(nodeId: string, level: number, order: number, totalSiblings: number) {
+    const node = nodesById.get(nodeId);
+    if (!node) return;
+
+    // Position based on direction
+    if (direction === 'vertical') {
+      // Calculate horizontal position to center the nodes at this level
+      const levelWidth = totalSiblings * siblingSpacing;
+      const startX = centerX - (levelWidth / 2) + (siblingSpacing / 2);
+      
+      // Vertical tree layout (top to bottom)
+      node.x = startX + (order * siblingSpacing);
+      node.y = centerY + (level * levelSpacing);
+    } else {
+      // Horizontal tree layout (left to right)
+      const levelHeight = totalSiblings * siblingSpacing;
+      const startY = centerY - (levelHeight / 2) + (siblingSpacing / 2);
+      
+      node.x = centerX + (level * levelSpacing);
+      node.y = startY + (order * siblingSpacing);
+    }
+
+    // Fix position
+    node.fx = node.x;
+    node.fy = node.y;
+
+    // Position children
+    const children = childrenMap.get(nodeId) || [];
+    children.forEach((childId: string, idx: number) => {
+      positionNodes(childId, level + 1, idx, children.length);
+    });
+  }
+
+  // Start positioning from root
+  positionNodes(rootId, 0, 0, 1);
+
+  // Create path generator for links
+  const linkPathGenerator = direction === 'vertical'
+    ? d3.linkVertical()
+        .x((d: any) => d.x)
+        .y((d: any) => d.y)
+    : d3.linkHorizontal()
+        .x((d: any) => d.x)
+        .y((d: any) => d.y);
+
+  // Transform links to have the right format for the path generator
+  const pathLinks = links.map(link => {
+    const source = typeof link.source === 'object' ? link.source : nodesById.get(link.source);
+    const target = typeof link.target === 'object' ? link.target : nodesById.get(link.target);
+    
+    if (!source || !target) return null;
+    
+    return {
+      source: {
+        x: source.x,
+        y: source.y + (direction === 'vertical' ? nodeHeight / 2 : 0)
+      },
+      target: {
+        x: target.x,
+        y: target.y - (direction === 'vertical' ? nodeHeight / 2 : 0)
+      }
+    };
+  }).filter(Boolean);
+
+  return {
+    nodes: data,
+    links: pathLinks,
+    linkPathGenerator
+  };
+}
+
+/**
+ * Creates curved links for tree layouts
+ * @param container - The D3 selection container to append links to
+ * @param links - The links data array
+ * @param pathGenerator - The D3 path generator function
+ * @param options - Configuration options for the links
+ * @returns The created link selection
+ */
+export function createTreeLinks(
+  container: d3.Selection<any, any, any, any>,
+  links: any[],
+  pathGenerator: any,
+  options: {
+    stroke?: string;
+    strokeWidth?: number;
+    strokeOpacity?: number;
+    markerEnd?: string;
+    createArrowMarker?: boolean;
+  } = {}
+) {
+  const {
+    stroke = '#999',
+    strokeWidth = 2,
+    strokeOpacity = 0.6,
+    markerEnd = 'url(#arrowhead)',
+    createArrowMarker = true
+  } = options;
+
+  // Create arrow marker if requested
+  if (createArrowMarker) {
+    container.append('defs').append('marker')
+      .attr('id', 'arrowhead')
+      .attr('viewBox', '-0 -5 10 10')
+      .attr('refX', 0)
+      .attr('refY', 0)
+      .attr('orient', 'auto')
+      .attr('markerWidth', 6)
+      .attr('markerHeight', 6)
+      .attr('xoverflow', 'visible')
+      .append('svg:path')
+      .attr('d', 'M 0,-5 L 10,0 L 0,5')
+      .attr('fill', stroke)
+      .style('stroke', 'none');
+  }
+
+  // Draw links as paths
+  const link = container.append('g')
+    .selectAll('path')
+    .data(links)
+    .enter().append('path')
+    .attr('d', pathGenerator)
+    .attr('fill', 'none')
+    .attr('stroke', stroke)
+    .attr('stroke-opacity', strokeOpacity)
+    .attr('stroke-width', strokeWidth)
+    .attr('marker-end', markerEnd);
+
+  return link;
 } 

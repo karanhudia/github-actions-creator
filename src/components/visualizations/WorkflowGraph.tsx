@@ -10,7 +10,9 @@ import {
   createForceSimulation, 
   createLinks, 
   updatePositions,
-  addIndicator
+  addIndicator,
+  createTreeLayout,
+  createTreeLinks
 } from '@/lib/d3Helpers';
 
 interface WorkflowGraphProps {
@@ -245,17 +247,7 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
     });
 
     // Create a container for all graph elements
-    const container = svg.append('g')
-      .attr('class', 'container');
-
-    // Add a background rect to catch zoom events
-    container.append('rect')
-      .attr('width', width * 3)
-      .attr('height', height * 3)
-      .attr('x', -width)
-      .attr('y', -height)
-      .attr('fill', 'none')
-      .attr('pointer-events', 'all');
+    const container = svg.append('g');
 
     // Add zoom controls (fixed position)
     const controls = svg.append('g')
@@ -337,16 +329,46 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
 
       // Add text
       svg.append('text')
-          .attr('class', 'job-title')
-          .attr('x', width / 2)
-          .attr('y', 30)
-          .attr('text-anchor', 'middle')
-          .attr('dominant-baseline', 'middle')
-          .attr('fill', 'white') // Same as zoom button text
-          .attr('font-size', '14px')  // Smaller to match button text
-          .attr('font-weight', 'normal')  // Remove bold
-          .text(`Job: ${selectedJob ? (workflow.jobs[selectedJob]?.name || selectedJob) : ''}`);
+        .attr('class', 'job-title')
+        .attr('x', width / 2)
+        .attr('y', 30)
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
+        .attr('fill', 'white')
+        .attr('font-size', '14px')
+        .attr('font-weight', 'normal')
+        .text(`Job: ${selectedJob ? (workflow.jobs[selectedJob]?.name || selectedJob) : ''}`);
     }
+
+    // Render the appropriate graph
+    if (viewMode === 'jobs') {
+      renderJobsGraph(container);
+    } else if (viewMode === 'steps' && selectedJob) {
+      renderStepsGraph(container, selectedJob);
+    }
+
+    // Center the view on the graph with a very short delay
+    // This ensures the graph is rendered before we try to center it
+    requestAnimationFrame(() => {
+      const containerNode = container.node();
+      if (!containerNode) return;
+      
+      const bounds = containerNode.getBBox();
+      const dx = bounds.width;
+      const dy = bounds.height;
+      const x = bounds.x + dx / 2;
+      const y = bounds.y + dy / 2;
+      
+      // Calculate the scale to fit the graph
+      const scale = 0.9 / Math.max(dx / width, dy / height);
+      const translate = [width / 2 - scale * x, height / 2 - scale * y];
+      
+      // Apply the transform immediately without animation for initial render
+      svg.call(zoom.transform as any, d3.zoomIdentity
+        .translate(translate[0], translate[1])
+        .scale(scale)
+      );
+    });
 
     // Add help text (fixed position)
     svg.append('text')
@@ -356,275 +378,6 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       .attr('font-size', '12px')
       .attr('fill', '#6B7280')
       .text('Scroll to zoom, drag to pan, double-click to reset view');
-
-    if (viewMode === 'jobs') {
-      renderJobsGraph(container);
-    } else if (viewMode === 'steps' && selectedJob) {
-      renderStepsGraph(container, selectedJob);
-    }
-
-    // Add variable details panel if a step is selected
-    if (selectedStep) {
-      // Create a fixed panel in the top right with scrollable content
-      const panelWidth = 320;
-      const panelHeight = Math.min(500, height - 100);
-
-      // Panel container
-      const detailsPanel = svg.append('g')
-        .attr('class', 'details-panel')
-        .attr('transform', `translate(${width - panelWidth - 20}, 70)`);
-
-      // Panel background
-      detailsPanel.append('rect')
-        .attr('width', panelWidth)
-        .attr('height', panelHeight)
-        .attr('rx', 8)
-        .attr('ry', 8)
-        .attr('fill', 'white')
-        .attr('stroke', '#E5E7EB')
-        .attr('stroke-width', 2)
-        .attr('opacity', 0.98);
-
-      // Panel header background
-      detailsPanel.append('rect')
-        .attr('width', panelWidth)
-        .attr('height', 40)
-        .attr('rx', 8)
-        .attr('ry', 0)
-        .attr('fill', '#3B82F6')
-        .attr('opacity', 0.9);
-
-      // Close button
-      const closeButton = detailsPanel.append('g')
-        .attr('transform', `translate(${panelWidth - 30}, 20)`)
-        .attr('cursor', 'pointer')
-        .on('click', () => {
-          setSelectedStep(null);
-        });
-
-      closeButton.append('circle')
-        .attr('r', 12)
-        .attr('fill', 'white')
-        .attr('opacity', 0.8);
-
-      closeButton.append('text')
-        .attr('x', 0)
-        .attr('y', 4)
-        .attr('text-anchor', 'middle')
-        .attr('font-size', '16px')
-        .attr('font-weight', 'bold')
-        .attr('fill', '#3B82F6')
-        .text('×');
-
-      // Panel title
-      detailsPanel.append('text')
-        .attr('x', 15)
-        .attr('y', 25)
-        .attr('font-size', '16px')
-        .attr('font-weight', 'bold')
-        .attr('fill', 'white')
-        .text('Step Details');
-
-      // Create a clipping path for scrollable content
-      detailsPanel.append('defs')
-        .append('clipPath')
-        .attr('id', 'details-clip')
-        .append('rect')
-        .attr('x', 0)
-        .attr('y', 40)
-        .attr('width', panelWidth)
-        .attr('height', panelHeight - 40);
-
-      // Scrollable content container
-      const content = detailsPanel.append('g')
-        .attr('clip-path', 'url(#details-clip)')
-        .attr('transform', 'translate(0, 40)');
-
-      // Add scrollbar
-      const scrollbarWidth = 8;
-      const scrollbarTrack = detailsPanel.append('rect')
-        .attr('x', panelWidth - scrollbarWidth - 5)
-        .attr('y', 45)
-        .attr('width', scrollbarWidth)
-        .attr('height', panelHeight - 50)
-        .attr('rx', 4)
-        .attr('fill', '#E5E7EB');
-
-      // Calculate scrollbar height and position based on content
-      const contentHeight = (selectedStep.variables?.length || 0) * 90 + 120;
-      const visibleHeight = panelHeight - 40;
-      const scrollRatio = Math.min(1, visibleHeight / contentHeight);
-      const scrollbarHeight = Math.max(30, scrollRatio * (panelHeight - 50));
-
-      const scrollbarThumb = detailsPanel.append('rect')
-        .attr('x', panelWidth - scrollbarWidth - 5)
-        .attr('y', 45)
-        .attr('width', scrollbarWidth)
-        .attr('height', scrollbarHeight)
-        .attr('rx', 4)
-        .attr('fill', '#9CA3AF')
-        .attr('cursor', 'pointer');
-
-      // Add scroll behavior
-      let scrollPos = 0;
-      const maxScroll = Math.max(0, contentHeight - visibleHeight);
-
-      // Mouse wheel scrolling
-      svg.on('wheel.scroll', function(event) {
-        if (selectedStep) {
-          event.preventDefault();
-          const delta = event.deltaY;
-          scrollPos = Math.min(maxScroll, Math.max(0, scrollPos + delta));
-          updateScroll();
-        }
-      });
-
-      // Drag scrollbar
-      const scrollDrag = d3.drag()
-        .on('drag', function(event) {
-          const trackHeight = panelHeight - 50 - scrollbarHeight;
-          const dragRatio = event.dy / trackHeight;
-          const scrollDelta = dragRatio * maxScroll;
-          scrollPos = Math.min(maxScroll, Math.max(0, scrollPos + scrollDelta));
-          updateScroll();
-        });
-
-      scrollbarThumb.call(scrollDrag as any);
-
-      function updateScroll() {
-        const scrollRatio = maxScroll > 0 ? scrollPos / maxScroll : 0;
-        const thumbY = 45 + scrollRatio * (panelHeight - 50 - scrollbarHeight);
-
-        content.attr('transform', `translate(0, ${40 - scrollPos})`);
-        scrollbarThumb.attr('y', thumbY);
-      }
-
-      // Step name
-      content.append('text')
-        .attr('x', 15)
-        .attr('y', 25)
-        .attr('font-size', '16px')
-        .attr('font-weight', 'bold')
-        .attr('fill', '#111827')
-        .text(selectedStep.name);
-
-      // Step type
-      content.append('text')
-        .attr('x', 15)
-        .attr('y', 50)
-        .attr('font-size', '14px')
-        .attr('fill', '#4B5563')
-        .text(selectedStep.uses
-          ? `Action: ${selectedStep.uses}`
-          : `Command: ${selectedStep.run || 'None'}`);
-
-      // Variables section
-      content.append('rect')
-        .attr('x', 15)
-        .attr('y', 65)
-        .attr('width', panelWidth - 30)
-        .attr('height', 30)
-        .attr('rx', 4)
-        .attr('fill', '#F3F4F6');
-
-      content.append('text')
-        .attr('x', 25)
-        .attr('y', 85)
-        .attr('font-size', '14px')
-        .attr('font-weight', 'bold')
-        .attr('fill', '#111827')
-        .text('Variables');
-
-      if (selectedStep.variables && selectedStep.variables.length > 0) {
-        const variablesList = content.append('g')
-          .attr('transform', 'translate(0, 100)');
-
-        selectedStep.variables.forEach((variable, index) => {
-          const yOffset = index * 90;
-
-          // Variable box
-          variablesList.append('rect')
-            .attr('x', 15)
-            .attr('y', yOffset)
-            .attr('width', panelWidth - 45) // Make room for scrollbar
-            .attr('height', 80)
-            .attr('rx', 4)
-            .attr('fill', (d) => {
-              if (variable.type === 'expression') return '#EFF6FF'; // Blue bg for expressions
-              if (variable.type === 'env') return '#ECFDF5'; // Green bg for env vars
-              if (variable.type === 'github_env') return '#FEF3C7'; // Yellow bg for GitHub env
-              if (variable.type === 'export') return '#F5F3FF'; // Purple bg for exports
-              return '#F9FAFB';
-            })
-            .attr('stroke', (d) => {
-              if (variable.type === 'expression') return '#BFDBFE'; // Blue border
-              if (variable.type === 'env') return '#A7F3D0'; // Green border
-              if (variable.type === 'github_env') return '#FDE68A'; // Yellow border
-              if (variable.type === 'export') return '#DDD6FE'; // Purple border
-              return '#E5E7EB';
-            })
-            .attr('stroke-width', 1);
-
-          // Variable name/expression
-          variablesList.append('text')
-            .attr('x', 25)
-            .attr('y', yOffset + 25)
-            .attr('font-size', '14px')
-            .attr('font-weight', 'bold')
-            .attr('fill', '#111827')
-            .text(() => {
-              if (variable.type === 'expression') {
-                return `$\{\{ ${variable.expression} \}\}`;
-              } else if (variable.type === 'env') {
-                return `env.${variable.name}`;
-              } else if (variable.type === 'github_env') {
-                return `${variable.name}=${variable.value.substring(0, 30)}${variable.value.length > 30 ? '...' : ''}`;
-              } else if (variable.type === 'export') {
-                return `export ${variable.name}=${variable.value.substring(0, 25)}${variable.value.length > 25 ? '...' : ''}`;
-              } else {
-                return 'Unknown variable';
-              }
-            });
-
-          // Variable value/prediction
-          variablesList.append('text')
-            .attr('x', 25)
-            .attr('y', yOffset + 50)
-            .attr('font-size', '13px')
-            .attr('fill', '#4B5563')
-            .text(() => {
-              if (variable.type === 'expression') {
-                return `Predicted: ${variable.predictedValue}`;
-              } else if (variable.type === 'env') {
-                return `Value: ${variable.value}`;
-              } else if (variable.predictedValue) {
-                return `Example: ${variable.predictedValue}`;
-              } else if (variable.note) {
-                return variable.note;
-              } else {
-                return 'No prediction available';
-              }
-            });
-
-          // Additional info if available
-          if (variable.note && !variable.note.includes('This variable will be available')) {
-            variablesList.append('text')
-              .attr('x', 25)
-              .attr('y', yOffset + 70)
-              .attr('font-size', '12px')
-              .attr('fill', '#6B7280')
-              .text(variable.note);
-          }
-        });
-      } else {
-        content.append('text')
-          .attr('x', 25)
-          .attr('y', 120)
-          .attr('font-size', '14px')
-          .attr('fill', '#6B7280')
-          .text('No variables used in this step');
-      }
-    }
 
     return () => {
       // Cleanup
@@ -656,26 +409,24 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
     const width = svgRef.current!.clientWidth;
     const height = svgRef.current!.clientHeight;
 
-    // Create force simulation
-    const simulation = createForceSimulation(jobs, links, {
+    // Create tree layout with explicit center position
+    const { nodes, links: pathLinks, linkPathGenerator } = createTreeLayout(jobs, links, {
       width,
       height,
-      linkDistance: 200,
-      chargeStrength: -1500,
-      verticalSpacing: 150,
-      verticalStrength: 0.2,
-      horizontalStrength: 0.1,
-      collisionRadius: 100,
-      collisionStrength: 0.8,
-      nodeWidth: 90,
-      nodeHeight: 40
+      direction: 'vertical',
+      nodeWidth: 180,
+      nodeHeight: 80,
+      levelSpacing: 200,
+      siblingSpacing: 220,
+      centerX: width / 2,
+      centerY: 120
     });
 
-    // Create links
-    const link = createLinks(container, links);
+    // Create curved links
+    const link = createTreeLinks(container, pathLinks, linkPathGenerator);
 
     // Create nodes
-    const node = createNodes(container, jobs, {
+    const node = createNodes(container, nodes, {
       width: 180,
       height: 80,
       fill: '#4299e1',
@@ -726,10 +477,8 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       fill: '#48bb78'
     });
 
-    // Update positions on simulation tick
-    simulation.on('tick', () => {
-      updatePositions(link, node, 90, 40);
-    });
+    // Position nodes
+    node.attr('transform', (d: any) => `translate(${d.x - 90}, ${d.y - 40})`);
   };
 
   const renderStepsGraph = (container: any, jobId: string) => {
@@ -752,7 +501,7 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       };
     });
 
-    // Create links between steps (sequential)
+    // Create sequential links between steps
     const links = steps.slice(0, -1).map((step: { id: string }, index: number) => ({
       source: step.id,
       target: `step-${index + 1}`,
@@ -762,26 +511,24 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
     const width = svgRef.current!.clientWidth;
     const height = svgRef.current!.clientHeight;
 
-    // Create force simulation
-    const simulation = createForceSimulation(steps, links, {
+    // Create tree layout - for steps we use a simple vertical chain
+    const { nodes, links: pathLinks, linkPathGenerator } = createTreeLayout(steps, links, {
       width,
       height,
-      linkDistance: 180,
-      chargeStrength: -1000,
-      verticalSpacing: 150,
-      verticalStrength: 0.3,
-      horizontalStrength: 0.2,
-      collisionRadius: 90,
-      collisionStrength: 0.8,
-      nodeWidth: 90,
-      nodeHeight: 50
+      direction: 'vertical',
+      nodeWidth: 180,
+      nodeHeight: 100,
+      levelSpacing: 180,
+      siblingSpacing: 220,
+      centerX: width / 2,
+      centerY: 120
     });
 
-    // Create links
-    const link = createLinks(container, links);
+    // Create curved links
+    const link = createTreeLinks(container, pathLinks, linkPathGenerator);
 
     // Create nodes
-    const node = createNodes(container, steps, {
+    const node = createNodes(container, nodes, {
       width: 180,
       height: 100,
       fill: (d: any) => d.uses ? '#8B5CF6' : '#F59E0B',
@@ -836,10 +583,8 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       fill: '#48bb78'
     });
 
-    // Update positions on simulation tick
-    simulation.on('tick', () => {
-      updatePositions(link, node, 90, 50);
-    });
+    // Position nodes
+    node.attr('transform', (d: any) => `translate(${d.x - 90}, ${d.y - 50})`);
   };
 
   if (isEmptyWorkflow) {
