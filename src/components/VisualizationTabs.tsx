@@ -6,8 +6,8 @@ import ErrorChecker from './visualizations/ErrorChecker';
 import CachingInfo from './visualizations/CachingInfo';
 import ArtifactsInfo from './visualizations/ArtifactsInfo';
 import Suggestions from './visualizations/Suggestions';
-import WorkflowBuilder from './visualizations/WorkflowBuilder';
 import VariablesInfo from './visualizations/VariablesInfo';
+import { useTheme } from '@/context/ThemeContext';
 
 interface VisualizationTabsProps {
   workflow: any;
@@ -15,6 +15,7 @@ interface VisualizationTabsProps {
 
 export default function VisualizationTabs({ workflow }: VisualizationTabsProps) {
   const [activeTab, setActiveTab] = useState('graph');
+  const { isDarkMode } = useTheme();
 
   const tabs = [
     { id: 'graph', label: 'Workflow Graph' },
@@ -23,12 +24,11 @@ export default function VisualizationTabs({ workflow }: VisualizationTabsProps) 
     { id: 'caching', label: 'Caching Info' },
     { id: 'artifacts', label: 'Artifacts Info' },
     { id: 'suggestions', label: 'Suggestions' },
-    { id: 'builder', label: 'Workflow Builder' },
   ];
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b">
+      <div className={`border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
         <div className="flex overflow-x-auto">
           {tabs.map((tab) => (
             <button
@@ -36,8 +36,8 @@ export default function VisualizationTabs({ workflow }: VisualizationTabsProps) 
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2 text-sm font-medium whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? isDarkMode ? 'text-blue-400 border-b-2 border-blue-400' : 'text-blue-600 border-b-2 border-blue-600'
+                  : isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-800'
               }`}
             >
               {tab.label}
@@ -53,7 +53,6 @@ export default function VisualizationTabs({ workflow }: VisualizationTabsProps) 
         {activeTab === 'caching' && <CachingInfo workflow={workflow} />}
         {activeTab === 'artifacts' && <ArtifactsInfo workflow={workflow} />}
         {activeTab === 'suggestions' && <Suggestions workflow={workflow} />}
-        {activeTab === 'builder' && <WorkflowBuilder workflow={workflow} />}
       </div>
     </div>
   );
