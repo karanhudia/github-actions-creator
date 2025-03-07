@@ -252,7 +252,7 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
     // Add zoom controls (fixed position)
     const controls = svg.append('g')
       .attr('class', 'zoom-controls')
-      .attr('transform', `translate(${width - 100}, 20)`);
+      .attr('transform', `translate(${width - 130}, 20)`);
 
     // Zoom in button
     controls.append('rect')
@@ -301,6 +301,44 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       .attr('font-size', '18px')
       .attr('pointer-events', 'none')
       .text('-');
+      
+    // Reset zoom button
+    controls.append('rect')
+      .attr('x', 80)
+      .attr('y', 0)
+      .attr('width', 30)
+      .attr('height', 30)
+      .attr('rx', 5)
+      .attr('fill', '#4B5563')
+      .attr('cursor', 'pointer')
+      .on('click', () => {
+        // Center the view with the fixed scale
+        const containerNode = container.node();
+        if (!containerNode) return;
+        
+        const bounds = containerNode.getBBox();
+        const x = bounds.x + bounds.width / 2;
+        const y = bounds.y + bounds.height / 2;
+        
+        const fixedScale = 0.8;
+        const translate = [width / 2 - fixedScale * x, height / 2 - fixedScale * y];
+        
+        svg.transition()
+          .duration(300)
+          .call(zoom.transform as any, d3.zoomIdentity
+            .translate(translate[0], translate[1])
+            .scale(fixedScale)
+          );
+      });
+
+    controls.append('text')
+      .attr('x', 95)
+      .attr('y', 20)
+      .attr('text-anchor', 'middle')
+      .attr('fill', 'white')
+      .attr('font-size', '12px')
+      .attr('pointer-events', 'none')
+      .text('⟳');
 
     // Add back button for steps view (fixed position)
     if (viewMode === 'steps') {
@@ -354,19 +392,17 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       if (!containerNode) return;
       
       const bounds = containerNode.getBBox();
-      const dx = bounds.width;
-      const dy = bounds.height;
-      const x = bounds.x + dx / 2;
-      const y = bounds.y + dy / 2;
+      const x = bounds.x + bounds.width / 2;
+      const y = bounds.y + bounds.height / 2;
       
-      // Calculate the scale to fit the graph
-      const scale = 0.9 / Math.max(dx / width, dy / height);
-      const translate = [width / 2 - scale * x, height / 2 - scale * y];
+      // Use a fixed scale instead of auto-scaling based on graph size
+      const fixedScale = 0.8;
+      const translate = [width / 2 - fixedScale * x, height / 2 - fixedScale * y];
       
       // Apply the transform immediately without animation for initial render
       svg.call(zoom.transform as any, d3.zoomIdentity
         .translate(translate[0], translate[1])
-        .scale(scale)
+        .scale(fixedScale)
       );
     });
 
@@ -377,7 +413,7 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       .attr('text-anchor', 'start')
       .attr('font-size', '12px')
       .attr('fill', '#6B7280')
-      .text('Scroll to zoom, drag to pan, double-click to reset view');
+      .text('Scroll to zoom, drag to pan, double-click or use ⟳ button to reset view');
 
     return () => {
       // Cleanup
@@ -409,7 +445,7 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
     const width = svgRef.current!.clientWidth;
     const height = svgRef.current!.clientHeight;
 
-    // Create tree layout with explicit center position
+    // Create tree layout with explicit center position and consistent spacing
     const { nodes, links: pathLinks, linkPathGenerator } = createTreeLayout(jobs, links, {
       width,
       height,
@@ -417,7 +453,7 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       nodeWidth: 180,
       nodeHeight: 80,
       levelSpacing: 200,
-      siblingSpacing: 220,
+      siblingSpacing: 250, // Increased for more consistent spacing
       centerX: width / 2,
       centerY: 120
     });
@@ -511,15 +547,15 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
     const width = svgRef.current!.clientWidth;
     const height = svgRef.current!.clientHeight;
 
-    // Create tree layout - for steps we use a simple vertical chain
+    // Create tree layout - for steps we use a simple vertical chain with consistent spacing
     const { nodes, links: pathLinks, linkPathGenerator } = createTreeLayout(steps, links, {
       width,
       height,
       direction: 'vertical',
       nodeWidth: 180,
       nodeHeight: 100,
-      levelSpacing: 180,
-      siblingSpacing: 220,
+      levelSpacing: 200, // Increased for more consistent spacing
+      siblingSpacing: 250, // Increased for more consistent spacing
       centerX: width / 2,
       centerY: 120
     });
