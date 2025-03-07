@@ -1,14 +1,11 @@
 'use client';
 
-import { useTheme } from '@/context/ThemeContext';
-
 interface ErrorCheckerProps {
   workflow: any;
   isDarkMode?: boolean;
 }
 
 export default function ErrorChecker({ workflow, isDarkMode = true }: ErrorCheckerProps) {
-  const { isDarkMode: themeIsDarkMode } = useTheme();
   const errors = checkForErrors(workflow);
 
   function checkForErrors(workflow: any) {
@@ -172,55 +169,6 @@ export default function ErrorChecker({ workflow, isDarkMode = true }: ErrorCheck
       'self-hosted'
     ];
     return commonRunners.includes(runner) || runner.startsWith('self-hosted');
-  }
-
-  function formatYamlError(error: any) {
-    if (error.message && error.message.includes('bad indentation')) {
-      // Check if it's the specific Slack notification error
-      if (error.message.includes('Notify Slack') || error.message.includes('success()') || error.message.includes('curl')) {
-        return (
-          <div className={`border-l-4 p-4 mb-4 ${themeIsDarkMode ? 'bg-red-900/20 border-red-500 text-red-400' : 'bg-red-100 border-red-500 text-red-700'}`}>
-            <p className="font-bold">YAML Indentation Error in Slack Notification</p>
-            <p>{error.message}</p>
-            <p className="mt-2">
-              <strong>Tip:</strong> The indentation for the "run" directive in the Slack notification step is incorrect.
-              Make sure the "run" directive is aligned with the "if" directive, with the same indentation level.
-            </p>
-            <p className="mt-2">
-              <strong>Note:</strong> The escaped quotes in the JSON data might also be causing issues. Try using double quotes for the curl command and single quotes for the JSON data.
-            </p>
-            <pre className={`mt-2 p-2 rounded ${themeIsDarkMode ? 'bg-gray-800' : 'bg-red-50'}`}>
-              {`      - name: Notify Slack
-        if: success()
-        run: curl -X POST -H "Content-type: application/json" --data '{"text":"🚀 Deployment Successful!"}' $\{\{ secrets.SLACK_WEBHOOK \}\}`}
-            </pre>
-            <p className="mt-2 text-sm">
-              Note: In GitHub Actions YAML, each property of a step should have the same indentation level.
-            </p>
-          </div>
-        );
-      }
-
-      // Generic indentation error
-      return (
-        <div className={`border-l-4 p-4 mb-4 ${themeIsDarkMode ? 'bg-red-900/20 border-red-500 text-red-400' : 'bg-red-100 border-red-500 text-red-700'}`}>
-          <p className="font-bold">YAML Indentation Error</p>
-          <p>{error.message}</p>
-          <p className="mt-2">
-            <strong>Tip:</strong> In YAML, indentation is crucial. Make sure all items at the same level have the same indentation.
-            For the "run:" directive in steps, ensure it's properly indented with 2 spaces more than the step name.
-          </p>
-          <pre className={`mt-2 p-2 rounded ${themeIsDarkMode ? 'bg-gray-800' : 'bg-red-50'}`}>
-            {`steps:
-  - name: Step Name
-    if: condition
-    run: command`}
-          </pre>
-        </div>
-      );
-    }
-
-    return <p className={`${themeIsDarkMode ? 'text-red-400' : 'text-red-500'}`}>{error.message || 'Unknown error'}</p>;
   }
 
   return (
