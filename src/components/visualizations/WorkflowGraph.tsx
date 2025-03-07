@@ -3,6 +3,7 @@
 import {useEffect, useRef, useState} from 'react';
 import * as d3 from 'd3';
 import {useTheme} from '@/context/ThemeContext';
+import { checkWorkflowForErrors, WorkflowError } from '@/lib/workflowErrorChecker';
 
 interface WorkflowGraphProps {
   workflow: any;
@@ -20,6 +21,48 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
     run?: string;
     variables: any[];
   } | null>(null);
+  const [errors, setErrors] = useState<WorkflowError[]>([]);
+  const [isEmptyWorkflow, setIsEmptyWorkflow] = useState<boolean>(false);
+
+  const hasValidationErrors = () => {
+    if (!workflow) {
+      return false;
+    }
+
+    const workflowErrors = checkWorkflowForErrors(workflow);
+    // Consider the workflow invalid if there are any error-type issues
+    // (warnings and info messages don't prevent visualization)
+    return workflowErrors.some(error => error.type === 'error');
+  }
+
+  // Validate workflow when it changes
+  useEffect(() => {
+    // Reset states
+    setErrors([]);
+    setIsEmptyWorkflow(false);
+
+    // Check if workflow is empty or undefined
+    if (!workflow) {
+      setIsEmptyWorkflow(true);
+      return;
+    }
+
+    // Check if workflow has no content (empty object)
+    if (workflow && Object.keys(workflow).length === 0) {
+      setIsEmptyWorkflow(true);
+      return;
+    }
+
+    // Check if workflow has no jobs (might be a valid empty workflow file)
+    if (!workflow.jobs || Object.keys(workflow.jobs).length === 0) {
+      setIsEmptyWorkflow(true);
+      return;
+    }
+
+    // If we have a non-empty workflow, check for errors
+    const workflowErrors = checkWorkflowForErrors(workflow);
+    setErrors(workflowErrors);
+  }, [workflow]);
 
   // Function to analyze variables in a step
   const analyzeStepVariables = (step: any) => {
@@ -158,6 +201,10 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
 
   useEffect(() => {
     if (!workflow || !svgRef.current) return;
+
+    if (hasValidationErrors()) {
+      return;
+    }
 
     // Clear previous graph
     d3.select(svgRef.current).selectAll('*').remove();
@@ -569,7 +616,7 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       // Cleanup
       svg.on('wheel.scroll', null);
     };
-  }, [workflow, viewMode, selectedJob, selectedStep]);
+  }, [workflow, viewMode, selectedJob, selectedStep, hasValidationErrors, isEmptyWorkflow]);
 
   const renderJobsGraph = (container: any) => {
     // Create graph data
@@ -891,6 +938,51 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       event.subject.fy = null;
     }
   };
+
+  if (isEmptyWorkflow) {
+    return <div className="h-full flex flex-col">
+      <div
+          className={`flex-1 border rounded-md overflow-auto p-4 flex items-center justify-center ${isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-400' : 'bg-white border-gray-200 text-gray-500'}`}>
+        <div className="text-center">
+          <svg className="w-12 h-12 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+               xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <h3 className="text-lg font-medium mb-2">No Workflow to Visualize</h3>
+          <p>Paste a GitHub Actions workflow on the left to see the visualization.</p>
+        </div>
+      </div>
+    </div>
+  }
+
+  if (hasValidationErrors()) {
+    return <div className="h-full flex flex-col">
+      <div
+          className={`flex-1 border rounded-md overflow-auto p-4 flex items-center justify-center ${isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-400' : 'bg-white border-gray-200 text-gray-500'}`}>
+        <div className="text-center">
+          <svg className="w-12 h-12 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+               xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          <h3 className="text-lg font-medium mb-2">Cannot Visualize Workflow</h3>
+          <p className="mb-4">The workflow contains errors that prevent visualization.</p>
+          {errors.filter(error => error.type === 'error').length > 0 && (
+              <div
+                  className={`text-left p-4 rounded-md ${isDarkMode ? 'bg-red-900/20 text-red-400' : 'bg-red-50 text-red-700'}`}>
+                <h4 className="font-medium mb-2">Errors to fix:</h4>
+                <ul className="list-disc pl-5 space-y-1">
+                  {errors.filter(error => error.type === 'error').map((error, index) => (
+                      <li key={index}>{error.message}</li>
+                  ))}
+                </ul>
+              </div>
+          )}
+        </div>
+      </div>
+    </div>
+  }
 
   return (
       <div className="h-full flex flex-col">
