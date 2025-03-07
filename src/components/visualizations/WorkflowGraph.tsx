@@ -650,15 +650,25 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
 
     // Create a force simulation with vertical layout
     const simulation = d3.forceSimulation(jobs as any)
-      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(150))
-      .force('charge', d3.forceManyBody().strength(-800))
+      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(200))
+      .force('charge', d3.forceManyBody().strength(-1500))
       .force('center', d3.forceCenter(width / 2, height / 2))
       // Add y-positioning force for vertical layout
-      .force('y', d3.forceY().strength(0.1).y((d: any, i) => {
-        return (i * 120) + 100; // Position jobs vertically with spacing
+      .force('y', d3.forceY().strength(0.2).y((d: any, i) => {
+        return (i * 150) + 100; // Increased vertical spacing
       }))
       // Reduce x-force to keep jobs more aligned vertically
-      .force('x', d3.forceX().strength(0.1).x(width / 2));
+      .force('x', d3.forceX().strength(0.1).x(width / 2))
+      // Add collision detection to prevent overlap
+      .force('collision', d3.forceCollide().radius(100).strength(0.8));
+      
+    // Fix nodes in place after initial layout
+    simulation.on('end', () => {
+      jobs.forEach((d: any) => {
+        d.fx = d.x;
+        d.fy = d.y;
+      });
+    });
 
     // Draw links
     const link = container.append('g')
@@ -690,10 +700,7 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       .selectAll('g')
       .data(jobs)
       .enter().append('g')
-      .call(d3.drag()
-        .on('start', dragstarted)
-        .on('drag', dragged)
-        .on('end', dragended))
+      // Remove drag behavior to make nodes fixed
       .on('click', (event: any, d: any) => {
         setSelectedJob(d.id);
         setViewMode('steps');
@@ -708,7 +715,8 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       .attr('fill', '#4299e1')
       .attr('stroke', '#2b6cb0')
       .attr('stroke-width', 2)
-      .attr('cursor', 'pointer');
+      .attr('cursor', 'pointer')
+      .attr('filter', 'drop-shadow(0px 2px 3px rgba(0, 0, 0, 0.2))');
 
     // Add job name with better text positioning
     node.append('text')
@@ -752,6 +760,18 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
 
     // Update positions on simulation tick
     simulation.on('tick', () => {
+      // Constrain nodes to stay within bounds
+      jobs.forEach((d: any) => {
+        d.x = Math.max(90, Math.min(width - 90, d.x));
+        d.y = Math.max(40, Math.min(height - 40, d.y));
+        
+        // Fix position after initial layout
+        if (simulation.alpha() < 0.1) {
+          d.fx = d.x;
+          d.fy = d.y;
+        }
+      });
+      
       link
         .attr('x1', (d: any) => d.source.x)
         .attr('y1', (d: any) => d.source.y)
@@ -761,24 +781,6 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       node
         .attr('transform', (d: any) => `translate(${d.x - 90}, ${d.y - 40})`);
     });
-
-    // Drag functions
-    function dragstarted(event: any) {
-      if (!event.active) simulation.alphaTarget(0.3).restart();
-      event.subject.fx = event.subject.x;
-      event.subject.fy = event.subject.y;
-    }
-
-    function dragged(event: any) {
-      event.subject.fx = event.x;
-      event.subject.fy = event.y;
-    }
-
-    function dragended(event: any) {
-      if (!event.active) simulation.alphaTarget(0);
-      event.subject.fx = null;
-      event.subject.fy = null;
-    }
   };
 
   const renderStepsGraph = (container: any, jobId: string) => {
@@ -813,15 +815,25 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
 
     // Create a force simulation with vertical layout
     const simulation = d3.forceSimulation(steps as any)
-      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(120))
-      .force('charge', d3.forceManyBody().strength(-500))
+      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(180))
+      .force('charge', d3.forceManyBody().strength(-1000))
       .force('center', d3.forceCenter(width / 2, height / 2))
       // Add y-positioning force for vertical layout
-      .force('y', d3.forceY().strength(0.2).y((d: any, i) => {
-        return (i * 120) + 100; // Position steps vertically with spacing
+      .force('y', d3.forceY().strength(0.3).y((d: any, i) => {
+        return (i * 150) + 100; // Increased vertical spacing
       }))
       // Reduce x-force to keep steps more aligned vertically
-      .force('x', d3.forceX().strength(0.2).x(width / 2));
+      .force('x', d3.forceX().strength(0.2).x(width / 2))
+      // Add collision detection to prevent overlap
+      .force('collision', d3.forceCollide().radius(90).strength(0.8));
+      
+    // Fix nodes in place after initial layout
+    simulation.on('end', () => {
+      steps.forEach((d: any) => {
+        d.fx = d.x;
+        d.fy = d.y;
+      });
+    });
 
     // Draw links
     const link = container.append('g')
@@ -853,10 +865,7 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       .selectAll('g')
       .data(steps)
       .enter().append('g')
-      .call(d3.drag()
-        .on('start', dragstarted)
-        .on('drag', dragged)
-        .on('end', dragended))
+      // Remove drag behavior to make nodes fixed
       .on('click', (event: any, d: any) => {
         setSelectedStep(d);
       });
@@ -870,7 +879,8 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       .attr('fill', (d: any) => d.uses ? '#8B5CF6' : '#F59E0B')
       .attr('stroke', (d: any) => d.uses ? '#6D28D9' : '#D97706')
       .attr('stroke-width', 2)
-      .attr('cursor', 'pointer');
+      .attr('cursor', 'pointer')
+      .attr('filter', 'drop-shadow(0px 2px 3px rgba(0, 0, 0, 0.2))');
 
     // Add step name
     node.append('text')
@@ -916,6 +926,18 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
 
     // Update positions on simulation tick
     simulation.on('tick', () => {
+      // Constrain nodes to stay within bounds
+      steps.forEach((d: any) => {
+        d.x = Math.max(90, Math.min(width - 90, d.x));
+        d.y = Math.max(50, Math.min(height - 50, d.y));
+        
+        // Fix position after initial layout
+        if (simulation.alpha() < 0.1) {
+          d.fx = d.x;
+          d.fy = d.y;
+        }
+      });
+      
       link
         .attr('x1', (d: any) => d.source.x)
         .attr('y1', (d: any) => d.source.y)
@@ -925,24 +947,6 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
       node
         .attr('transform', (d: any) => `translate(${d.x - 90}, ${d.y - 50})`);
     });
-
-    // Drag functions
-    function dragstarted(event: any) {
-      if (!event.active) simulation.alphaTarget(0.3).restart();
-      event.subject.fx = event.subject.x;
-      event.subject.fy = event.subject.y;
-    }
-
-    function dragged(event: any) {
-      event.subject.fx = event.x;
-      event.subject.fy = event.y;
-    }
-
-    function dragended(event: any) {
-      if (!event.active) simulation.alphaTarget(0);
-      event.subject.fx = null;
-      event.subject.fy = null;
-    }
   };
 
   if (isEmptyWorkflow) {
