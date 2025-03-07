@@ -1,10 +1,14 @@
 'use client';
 
+import { useTheme } from '@/context/ThemeContext';
+
 interface ErrorCheckerProps {
   workflow: any;
+  isDarkMode?: boolean;
 }
 
-export default function ErrorChecker({ workflow }: ErrorCheckerProps) {
+export default function ErrorChecker({ workflow, isDarkMode = true }: ErrorCheckerProps) {
+  const { isDarkMode: themeIsDarkMode } = useTheme();
   const errors = checkForErrors(workflow);
 
   function checkForErrors(workflow: any) {
@@ -21,7 +25,7 @@ export default function ErrorChecker({ workflow }: ErrorCheckerProps) {
     // Check for circular dependencies
     const jobIds = Object.keys(workflow.jobs || {});
     const dependencyGraph: Record<string, string[]> = {};
-    
+
     jobIds.forEach(jobId => {
       const job = workflow.jobs[jobId];
       dependencyGraph[jobId] = job.needs || [];
@@ -90,7 +94,7 @@ export default function ErrorChecker({ workflow }: ErrorCheckerProps) {
     const variableMatches = workflowStr.match(/\$\{\{\s*[^}]+\s*\}\}/g) || [];
     variableMatches.forEach(match => {
       const varName = match.replace(/\$\{\{\s*/, '').replace(/\s*\}\}/, '').trim();
-      
+
       // Check for common variable types
       if (varName.startsWith('env.')) {
         const envVar = varName.substring(4);
@@ -103,7 +107,7 @@ export default function ErrorChecker({ workflow }: ErrorCheckerProps) {
               break;
             }
           }
-          
+
           if (!foundInJob) {
             errors.push({
               type: 'warning',
@@ -170,12 +174,64 @@ export default function ErrorChecker({ workflow }: ErrorCheckerProps) {
     return commonRunners.includes(runner) || runner.startsWith('self-hosted');
   }
 
+  function formatYamlError(error: any) {
+    if (error.message && error.message.includes('bad indentation')) {
+      // Check if it's the specific Slack notification error
+      if (error.message.includes('Notify Slack') || error.message.includes('success()') || error.message.includes('curl')) {
+        return (
+          <div className={`border-l-4 p-4 mb-4 ${themeIsDarkMode ? 'bg-red-900/20 border-red-500 text-red-400' : 'bg-red-100 border-red-500 text-red-700'}`}>
+            <p className="font-bold">YAML Indentation Error in Slack Notification</p>
+            <p>{error.message}</p>
+            <p className="mt-2">
+              <strong>Tip:</strong> The indentation for the "run" directive in the Slack notification step is incorrect.
+              Make sure the "run" directive is aligned with the "if" directive, with the same indentation level.
+            </p>
+            <p className="mt-2">
+              <strong>Note:</strong> The escaped quotes in the JSON data might also be causing issues. Try using double quotes for the curl command and single quotes for the JSON data.
+            </p>
+            <pre className={`mt-2 p-2 rounded ${themeIsDarkMode ? 'bg-gray-800' : 'bg-red-50'}`}>
+              {`      - name: Notify Slack
+        if: success()
+        run: curl -X POST -H "Content-type: application/json" --data '{"text":"🚀 Deployment Successful!"}' $\{\{ secrets.SLACK_WEBHOOK \}\}`}
+            </pre>
+            <p className="mt-2 text-sm">
+              Note: In GitHub Actions YAML, each property of a step should have the same indentation level.
+            </p>
+          </div>
+        );
+      }
+
+      // Generic indentation error
+      return (
+        <div className={`border-l-4 p-4 mb-4 ${themeIsDarkMode ? 'bg-red-900/20 border-red-500 text-red-400' : 'bg-red-100 border-red-500 text-red-700'}`}>
+          <p className="font-bold">YAML Indentation Error</p>
+          <p>{error.message}</p>
+          <p className="mt-2">
+            <strong>Tip:</strong> In YAML, indentation is crucial. Make sure all items at the same level have the same indentation.
+            For the "run:" directive in steps, ensure it's properly indented with 2 spaces more than the step name.
+          </p>
+          <pre className={`mt-2 p-2 rounded ${themeIsDarkMode ? 'bg-gray-800' : 'bg-red-50'}`}>
+            {`steps:
+  - name: Step Name
+    if: condition
+    run: command`}
+          </pre>
+        </div>
+      );
+    }
+
+    return <p className={`${themeIsDarkMode ? 'text-red-400' : 'text-red-500'}`}>{error.message || 'Unknown error'}</p>;
+  }
+
   return (
     <div className="h-full flex flex-col">
-      <h2 className="text-xl font-semibold mb-4">Error Checker</h2>
-      <div className="flex-1 border rounded-md overflow-auto p-4 bg-white">
-        {errors.length === 0 ? (
-          <div className="flex items-center text-green-600 p-4 bg-green-50 rounded-md">
+      <div className={`flex-1 border rounded-md overflow-auto p-4 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+        {!workflow ? (
+          <div className={`flex items-center justify-center h-full ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            <p>Paste a GitHub Actions workflow on the left to check for errors</p>
+          </div>
+        ) : errors.length === 0 ? (
+          <div className={`flex items-center ${isDarkMode ? 'text-green-400 bg-green-900/20' : 'text-green-600 bg-green-50'} p-4 rounded-md`}>
             <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
@@ -184,14 +240,14 @@ export default function ErrorChecker({ workflow }: ErrorCheckerProps) {
         ) : (
           <ul className="space-y-2">
             {errors.map((error, index) => (
-              <li 
-                key={index} 
+              <li
+                key={index}
                 className={`p-3 rounded-md ${
                   error.type === 'error' 
-                    ? 'bg-red-50 text-red-700' 
+                    ? isDarkMode ? 'bg-red-900/20 text-red-400' : 'bg-red-50 text-red-700'
                     : error.type === 'warning'
-                      ? 'bg-yellow-50 text-yellow-700'
-                      : 'bg-blue-50 text-blue-700'
+                      ? isDarkMode ? 'bg-yellow-900/20 text-yellow-400' : 'bg-yellow-50 text-yellow-700'
+                      : isDarkMode ? 'bg-blue-900/20 text-blue-400' : 'bg-blue-50 text-blue-700'
                 }`}
               >
                 <div className="flex items-start">
@@ -217,4 +273,4 @@ export default function ErrorChecker({ workflow }: ErrorCheckerProps) {
       </div>
     </div>
   );
-} 
+}

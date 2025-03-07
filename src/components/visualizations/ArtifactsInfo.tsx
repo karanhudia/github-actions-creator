@@ -30,7 +30,7 @@ export default function ArtifactsInfo({ workflow }: ArtifactsInfoProps) {
             index,
           });
         }
-        
+
         // Check for download-artifact
         if (step.uses && step.uses.startsWith('actions/download-artifact@')) {
           info.downloads.push({
@@ -72,7 +72,6 @@ export default function ArtifactsInfo({ workflow }: ArtifactsInfoProps) {
 
   return (
     <div className="h-full flex flex-col">
-      <h2 className="text-xl font-semibold mb-4">Artifacts Information</h2>
       <div className="flex-1 border rounded-md overflow-auto p-4 bg-white">
         <div className="mb-6">
           <h3 className="text-lg font-medium mb-2">Artifact Usage</h3>
@@ -158,4 +157,4 @@ export default function ArtifactsInfo({ workflow }: ArtifactsInfoProps) {
       </div>
     </div>
   );
-} 
+}

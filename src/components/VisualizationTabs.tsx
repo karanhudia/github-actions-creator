@@ -46,7 +46,7 @@ export default function VisualizationTabs({ workflow }: VisualizationTabsProps) 
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden mt-4">
         {activeTab === 'graph' && <WorkflowGraph workflow={workflow} />}
         {activeTab === 'errors' && <ErrorChecker workflow={workflow} />}
         {activeTab === 'variables' && <VariablesInfo workflow={workflow} />}
@@ -56,4 +56,4 @@ export default function VisualizationTabs({ workflow }: VisualizationTabsProps) 
       </div>
     </div>
   );
-} 
+}

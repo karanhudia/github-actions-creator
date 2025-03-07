@@ -101,7 +101,6 @@ export default function Suggestions({ workflow }: SuggestionsProps) {
 
   return (
     <div className="h-full flex flex-col">
-      <h2 className="text-xl font-semibold mb-4">Workflow Suggestions</h2>
       <div className="flex-1 border rounded-md overflow-auto p-4 bg-white">
         {suggestions.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-500">
@@ -112,7 +111,7 @@ export default function Suggestions({ workflow }: SuggestionsProps) {
             {['Performance', 'Reliability', 'Security', 'Efficiency', 'Configuration', 'Documentation', 'Triggers'].map(category => {
               const categorySuggestions = suggestions.filter(s => s.category === category);
               if (categorySuggestions.length === 0) return null;
-              
+
               return (
                 <div key={category}>
                   <h3 className="text-lg font-medium mb-3">{category}</h3>
@@ -136,4 +135,4 @@ export default function Suggestions({ workflow }: SuggestionsProps) {
       </div>
     </div>
   );
-} 
+}

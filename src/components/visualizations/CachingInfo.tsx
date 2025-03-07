@@ -31,7 +31,7 @@ export default function CachingInfo({ workflow }: CachingInfoProps) {
             index,
           });
         }
-        
+
         // Check for setup-node with cache
         if (step.uses && step.uses.startsWith('actions/setup-node@') && step.with && step.with.cache) {
           info.cachingUsed = true;
@@ -48,13 +48,13 @@ export default function CachingInfo({ workflow }: CachingInfoProps) {
     // Generate recommendations
     if (!info.cachingUsed) {
       info.recommendations.push('No caching detected. Consider adding caching to improve workflow performance.');
-      
+
       // Check for common cacheable scenarios
       const hasNodeModules = JSON.stringify(workflow).includes('node_modules');
       if (hasNodeModules) {
         info.recommendations.push('Detected potential Node.js project. Consider caching node_modules with actions/cache or using setup-node with cache option.');
       }
-      
+
       const hasPipPackages = JSON.stringify(workflow).includes('pip install');
       if (hasPipPackages) {
         info.recommendations.push('Detected pip install commands. Consider caching Python dependencies.');
@@ -79,7 +79,6 @@ export default function CachingInfo({ workflow }: CachingInfoProps) {
 
   return (
     <div className="h-full flex flex-col">
-      <h2 className="text-xl font-semibold mb-4">Caching Information</h2>
       <div className="flex-1 border rounded-md overflow-auto p-4 bg-white">
         <div className="mb-6">
           <h3 className="text-lg font-medium mb-2">Cache Usage</h3>
@@ -150,4 +149,4 @@ export default function CachingInfo({ workflow }: CachingInfoProps) {
       </div>
     </div>
   );
-} 
+}
