@@ -26,7 +26,7 @@ export default function CodeEditor({ code, onChange }: CodeEditorProps) {
 
   return (
     <div className="h-full flex flex-col">
-      <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+      <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-600' : 'text-gray-600'}`}>
         Paste your GitHub Actions workflow YAML here
       </p>
       <div className={`flex-1 border rounded-md overflow-hidden ${isDarkMode ? 'border-gray-700' : 'border-gray-300'}`}>

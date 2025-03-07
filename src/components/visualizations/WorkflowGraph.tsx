@@ -214,6 +214,12 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
     const width = svgRef.current.clientWidth;
     const height = svgRef.current.clientHeight;
 
+    // Set background color based on theme
+    svg.append('rect')
+      .attr('width', width)
+      .attr('height', height)
+      .attr('fill', isDarkMode ? '#1e1e1e' : 'white');
+
     // Add zoom behavior
     const zoom = d3.zoom()
       .scaleExtent([0.3, 3])
@@ -331,7 +337,7 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
           .attr('fill', 'white') // Same as zoom button text
           .attr('font-size', '14px')  // Smaller to match button text
           .attr('font-weight', 'normal')  // Remove bold
-          .text(`Job: ${workflow.jobs[selectedJob].name || selectedJob}`);
+          .text(`Job: ${selectedJob ? (workflow.jobs[selectedJob]?.name || selectedJob) : ''}`);
     }
 
     // Add help text (fixed position)
@@ -796,7 +802,7 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
     });
 
     // Create links between steps (sequential)
-    const links = steps.slice(0, -1).map((step, index) => ({
+    const links = steps.slice(0, -1).map((step: { id: string }, index: number) => ({
       source: step.id,
       target: `step-${index + 1}`,
     }));
@@ -997,7 +1003,7 @@ export default function WorkflowGraph({ workflow }: WorkflowGraphProps) {
             )}
           </div>
         </div>
-        <div className={`flex-1 border rounded-md overflow-hidden ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
+        <div className={`flex-1 border rounded-md overflow-hidden ${isDarkMode ? 'border-gray-700 bg-[#1e1e1e]' : 'border-gray-200 bg-white'}`}>
           <svg ref={svgRef} width="100%" height="100%"></svg>
         </div>
       </div>

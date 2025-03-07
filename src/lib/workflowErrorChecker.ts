@@ -11,6 +11,10 @@ export interface WorkflowError {
 export function checkWorkflowForErrors(workflow: any): WorkflowError[] {
   const errors: WorkflowError[] = [];
 
+  if (!workflow) {
+    return [];
+  }
+
   // Check if workflow has jobs
   if (!workflow.jobs || Object.keys(workflow.jobs).length === 0) {
     errors.push({
@@ -179,4 +183,4 @@ export function isValidRunner(runner: string): boolean {
     'self-hosted'
   ];
   return commonRunners.includes(runner) || runner.startsWith('self-hosted');
-} 
+}
